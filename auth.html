@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login / Registrierung</title>
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --accent:#4f46e5; --muted:#9aa4bf; --success:#10b981;
+      color-scheme: dark;
+    }
+    body{font-family:Inter, system-ui, sans-serif; background:linear-gradient(180deg,#071028 0%, #081224 100%); margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; color:#e6eef8;}
+    .container{width:980px; max-width:100%; display:grid; grid-template-columns:1fr 380px; gap:28px; align-items:start;}
+    .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03); padding:26px; border-radius:12px; box-shadow:0 10px 30px rgba(2,6,23,0.6);}
+    h1{margin:0 0 8px 0; font-size:20px;}
+    p.lead{margin:0 0 18px 0; color:var(--muted);}
+    form{display:grid; gap:10px;}
+    input[type="text"], input[type="email"], input[type="password"]{background:#071023; border:1px solid rgba(255,255,255,0.04); padding:10px 12px; border-radius:8px; color:inherit; outline:none;}
+    button{background:var(--accent); color:white; border:0; padding:10px 12px; border-radius:8px; cursor:pointer; font-weight:600;}
+    .muted{color:var(--muted); font-size:13px;}
+    .small{font-size:13px; color:var(--muted);}
+    .message{padding:10px;border-radius:8px;margin-top:8px;}
+    .success{background:rgba(16,185,129,0.12); color:var(--success); border:1px solid rgba(16,185,129,0.12);}
+    .error{background:rgba(239,68,68,0.07); color:#fda4af; border:1px solid rgba(239,68,68,0.08);}
+    .info-row{display:flex; justify-content:space-between; align-items:center;}
+    .link{color:var(--accent); text-decoration:none; font-weight:600;}
+    .userbox{background:linear-gradient(180deg,#07122a,#061021); padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.02);}
+    .current{background:rgba(79,70,229,0.08); border:1px solid rgba(79,70,229,0.12);}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="panel">
+      <h1>Willkommen</h1>
+      <p class="lead">Registriere dich oder logge dich ein. Die Daten werden lokal im Browser gespeichert (localStorage).</p>
+
+      <div style="display:grid; gap:14px; grid-template-columns:1fr 1fr;">
+        
+        <div class="userbox">
+          <h2 style="font-size:15px; margin:0 0 8px 0;">Registrieren</h2>
+          <form id="registerForm">
+            <input id="regName" type="text" placeholder="Benutzername" required />
+            <input id="regEmail" type="email" placeholder="E-Mail" required />
+            <input id="regPassword" type="password" placeholder="Passwort" required />
+            <button type="submit">Registrieren</button>
+            <div id="regMsg" class="message" style="display:none"></div>
+            <div class="small" style="margin-top:6px;">Hinweis: Verwende kein echtes Passwort für diese Demo.</div>
+          </form>
+        </div>
+
+        <!-- Login -->
+        <div class="userbox">
+          <h2 style="font-size:15px; margin:0 0 8px 0;">Einloggen</h2>
+          <form id="loginForm">
+            <input id="loginEmail" type="email" placeholder="E-Mail" required />
+            <input id="loginPassword" type="password" placeholder="Passwort" required />
+            <button type="submit">Einloggen</button>
+            <div id="loginMsg" class="message" style="display:none"></div>
+            <div style="margin-top:8px;">
+              <a class="link" href="admin.html" id="adminLink">Zur Benutzerliste (Admin)</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <hr style="border:none;height:1px;background:rgba(255,255,255,0.02); margin:18px 0;" />
+      <div class="small">Letzter angemeldeter Benutzer: <span id="lastLogged" class="muted">-</span></div>
+    </div>
+
+    <div class="panel">
+      <h1>Aktueller Status</h1>
+      <p class="muted">Zeigt den aktuell angemeldeten Benutzer und einfache Aktionen.</p>
+
+      <div id="statusArea" style="display:grid; gap:12px; margin-top:8px;">
+        <div id="noUser" class="userbox">Kein Nutzer angemeldet.</div>
+
+        <div id="loggedUser" class="userbox current" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div id="suName" style="font-weight:700"></div>
+              <div class="muted" id="suEmail"></div>
+            </div>
+            <div>
+              <button id="logoutBtn" style="background:#ef4444;">Ausloggen</button>
+            </div>
+          </div>
+          <div class="small" style="margin-top:8px;">Angemeldet seit: <span id="suSince"></span></div>
+        </div>
+      </div>
+
+      <hr style="border:none;height:1px;background:rgba(255,255,255,0.02); margin:18px 0;" />
+      <div class="small">Tipp: Öffne <code>admin.html</code> in diesem Browser, um alle registrierten Nutzer zu sehen.</div>
+    </div>
+  </div>
+
+<script>
+/* Helfer: SHA-256 Hash (Hex) */
+async function hashPassword(pwd){
+  const enc = new TextEncoder().encode(pwd);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/* Storage helpers */
+function loadUsers(){
+  try{
+    const raw = localStorage.getItem('users');
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function saveUsers(users){
+  localStorage.setItem('users', JSON.stringify(users));
+}
+
+/* Registrieren */
+document.getElementById('registerForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const name = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
+  const pwd = document.getElementById('regPassword').value;
+
+  const msg = document.getElementById('regMsg');
+  msg.style.display='none';
+
+  if(!name || !email || !pwd){ showMsg(msg,'Bitte alle Felder ausfüllen','error'); return; }
+
+  let users = loadUsers();
+  if(users.some(u=>u.email === email)){ showMsg(msg,'E-Mail bereits registriert','error'); return; }
+
+  const hash = await hashPassword(pwd);
+  const newUser = { id: Date.now(), name, email, pwdHash: hash, created: new Date().toISOString(), logged:false, lastLogin:null };
+  users.push(newUser);
+  saveUsers(users);
+  showMsg(msg,'Registrierung erfolgreich ✓','success');
+  this.reset();
+  refreshStatus();
+});
+
+/* Login */
+document.getElementById('loginForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pwd = document.getElementById('loginPassword').value;
+  const msg = document.getElementById('loginMsg');
+  msg.style.display='none';
+
+  if(!email || !pwd){ showMsg(msg,'Bitte E-Mail & Passwort eingeben','error'); return; }
+
+  let users = loadUsers();
+  const hash = await hashPassword(pwd);
+  const idx = users.findIndex(u => u.email === email);
+  if(idx === -1){ showMsg(msg,'Benutzer nicht gefunden','error'); return; }
+  if(users[idx].pwdHash !== hash){ showMsg(msg,'Falsches Passwort','error'); return; }
+
+  // markiere als eingeloggt, setze lastLogin
+  users = users.map((u,i)=> {
+    if(i===idx){ u.logged = true; u.lastLogin = new Date().toISOString(); }
+    return u;
+  });
+  saveUsers(users);
+  localStorage.setItem('currentUser', users[idx].email); // einfacher session-flag
+  showMsg(msg,'Login erfolgreich ✓','success');
+  this.reset();
+  refreshStatus();
+});
+
+/* Logout */
+document.getElementById('logoutBtn').addEventListener('click', function(){
+  const current = localStorage.getItem('currentUser');
+  if(!current) return;
+  let users = loadUsers();
+  users = users.map(u => { if(u.email === current) u.logged = false; return u; });
+  saveUsers(users);
+  localStorage.removeItem('currentUser');
+  refreshStatus();
+});
+
+/* UI helpers */
+function showMsg(el, text, typ='info'){
+  el.textContent = text;
+  el.className = 'message ' + (typ==='success'? 'success' : typ==='error'? 'error' : '');
+  el.style.display='block';
+  setTimeout(()=>{ el.style.display='none'; }, 5000);
+}
+
+function refreshStatus(){
+  const current = localStorage.getItem('currentUser');
+  const users = loadUsers();
+  const last = users.reduce((a,b)=> a.lastLogin && (!b.lastLogin || new Date(a.lastLogin) > new Date(b.lastLogin)) ? a : b, {});
+  document.getElementById('lastLogged').textContent = last && last.lastLogin ? `${last.name} (${new Date(last.lastLogin).toLocaleString()})` : '-';
+
+  if(current){
+    const user = users.find(u=>u.email===current);
+    if(user){
+      document.getElementById('noUser').style.display='none';
+      const lu = document.getElementById('loggedUser');
+      document.getElementById('suName').textContent = user.name;
+      document.getElementById('suEmail').textContent = user.email;
+      document.getElementById('suSince').textContent = user.lastLogin ? new Date(user.lastLogin).toLocaleString() : '-';
+      lu.style.display='block';
+      return;
+    }
+  }
+  document.getElementById('noUser').style.display='block';
+  document.getElementById('loggedUser').style.display='none';
+}
+
+/* initial */
+refreshStatus();
+</script>
+</body>
+</html>
